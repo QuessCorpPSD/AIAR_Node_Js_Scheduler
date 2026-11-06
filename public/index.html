@@ -1,0 +1,142 @@
+<!doctype html>
+<html lang="en">
+<head>
+  <meta charset="utf-8" />
+  <title>Outlook Attachment Pipeline</title>
+  <meta name="viewport" content="width=device-width, initial-scale=1" />
+  <style>
+    :root { color-scheme: light dark; }
+    body {
+      font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, sans-serif;
+      max-width: 900px; margin: 40px auto; padding: 0 20px; line-height: 1.5;
+    }
+    h1 { font-size: 1.4rem; }
+    fieldset { border: 1px solid #ccc; border-radius: 8px; margin-bottom: 16px; padding: 16px; }
+    label { display: block; font-size: 0.85rem; margin-top: 10px; margin-bottom: 4px; opacity: 0.8; }
+    input { width: 100%; padding: 8px; box-sizing: border-box; font-size: 0.95rem; }
+    .row { display: flex; gap: 12px; }
+    .row > div { flex: 1; }
+    button {
+      padding: 10px 18px; font-size: 0.95rem; border-radius: 6px; border: none;
+      cursor: pointer; margin-top: 12px; background: #188038; color: white;
+    }
+    button:disabled { opacity: 0.5; cursor: not-allowed; }
+    #status { margin: 12px 0; font-size: 0.9rem; }
+    #errors { color: #b3261e; font-size: 0.85rem; white-space: pre-wrap; margin-bottom: 8px; }
+    #warnings { color: #b06000; font-size: 0.85rem; white-space: pre-wrap; }
+    pre {
+      background: #111; color: #d4d4d4; padding: 14px; border-radius: 8px;
+      overflow: auto; max-height: 60vh; font-size: 0.82rem;
+    }
+    small { opacity: 0.7; }
+  </style>
+</head>
+<body>
+  <h1>📎 Outlook Attachment Pipeline <a href="/api-docs" style="font-size: 0.5em; font-weight: normal;">API docs ↗</a></h1>
+  <p>
+    One click does everything: connects to Outlook via Microsoft Graph API (using the
+    credentials in the server's <code>.env</code> unless overridden below), searches,
+    downloads, and extracts every matching attachment into structured JSON (LangChain + OpenAI).
+  </p>
+
+  <fieldset>
+    <legend>Outlook mailbox <small>(optional — leave blank to use server .env)</small></legend>
+    <div class="row">
+      <div>
+        <label for="email">Email</label>
+        <input id="email" type="email" placeholder="you@outlook.com" />
+      </div>
+    </div>
+  </fieldset>
+
+  <fieldset>
+    <legend>Filters <small>(optional)</small></legend>
+    <div class="row">
+      <div>
+        <label for="subject">Subject contains</label>
+        <input id="subject" placeholder="e.g. invoice" />
+      </div>
+      <div>
+        <label for="from">From contains</label>
+        <input id="from" placeholder="e.g. billing@" />
+      </div>
+    </div>
+    <div class="row">
+      <div>
+        <label for="after">After date</label>
+        <input id="after" type="date" />
+      </div>
+      <div>
+        <label for="before">Before date</label>
+        <input id="before" type="date" />
+      </div>
+      <div>
+        <label for="maxResults">Max emails</label>
+        <input id="maxResults" type="number" value="25" min="1" max="200" />
+      </div>
+    </div>
+  </fieldset>
+
+  <button id="executeBtn">▶ Execute</button>
+
+  <div id="status"></div>
+  <div id="errors"></div>
+  <div id="warnings"></div>
+  <pre id="output">// Results will appear here as JSON</pre>
+
+  <script>
+    const $ = (id) => document.getElementById(id);
+    const executeBtn = $('executeBtn');
+    const statusEl = $('status');
+    const errorsEl = $('errors');
+    const warningsEl = $('warnings');
+    const outputEl = $('output');
+
+    executeBtn.addEventListener('click', async () => {
+      executeBtn.disabled = true;
+      statusEl.textContent = '⏳ Connecting, searching, downloading, and extracting… (can take a while for many/large attachments)';
+      errorsEl.textContent = '';
+      warningsEl.textContent = '';
+      outputEl.textContent = '';
+
+      const body = {
+        email: $('email').value || undefined,
+        filters: {
+          subjectContains: $('subject').value || undefined,
+          fromContains: $('from').value || undefined,
+          afterDate: $('after').value || undefined,
+          beforeDate: $('before').value || undefined,
+          maxResults: Number($('maxResults').value) || 25
+        }
+      };
+
+      try {
+        const res = await fetch('/api/execute', {
+          method: 'POST',
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify(body)
+        });
+        const payload = await res.json().catch(() => ({}));
+        if (!res.ok || !payload.success) throw new Error(payload.error?.message || `Request failed (HTTP ${res.status})`);
+
+        const data = payload.data;
+        const tookSec = payload.meta?.tookMs != null ? ` (${(payload.meta.tookMs / 1000).toFixed(1)}s)` : '';
+        statusEl.textContent =
+          `✅ Done${tookSec} — ${data.messageCount} emails matched, ${data.attachmentCount} attachments found: ` +
+          `${data.succeededCount} succeeded, ${data.failedCount} failed, ${data.skippedCount} skipped.`;
+        if (data.errors?.length) {
+          errorsEl.textContent = '❌ ' + data.errors.map((e) => `[${e.stage}] ${e.file}: ${e.message}`).join('\n❌ ');
+        }
+        if (data.warnings?.length) {
+          warningsEl.textContent = '⚠ ' + data.warnings.map((w) => `${w.file}: ${w.message}`).join('\n⚠ ');
+        }
+        outputEl.textContent = JSON.stringify(data.rows, null, 2);
+      } catch (err) {
+        statusEl.textContent = `❌ ${err.message}`;
+      } finally {
+        executeBtn.disabled = false;
+      }
+    });
+  </script>
+</body>
+</html>

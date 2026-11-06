@@ -1,0 +1,136 @@
+{
+  "openapi": "3.0.3",
+  "info": {
+    "title": "Outlook Attachment Pipeline API",
+    "version": "1.0.0",
+    "description": "Scheduled Outlook attachment pipeline. A cron job reads unread Outlook mail via Microsoft Graph, extracts payment advice with LangChain + OpenAI and submits it to the AR API. This API exposes a health check and cron status/trigger endpoints."
+  },
+  "servers": [
+    {
+      "url": "/",
+      "description": "This server"
+    }
+  ],
+  "tags": [
+    {
+      "name": "System"
+    },
+    {
+      "name": "Cron"
+    }
+  ],
+  "paths": {
+    "/api/health": {
+      "get": {
+        "tags": [
+          "System"
+        ],
+        "summary": "Liveness check",
+        "responses": {
+          "200": {
+            "description": "Server is up",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "type": "object",
+                  "properties": {
+                    "success": {
+                      "type": "boolean",
+                      "example": true
+                    },
+                    "data": {
+                      "type": "object",
+                      "properties": {
+                        "ok": {
+                          "type": "boolean",
+                          "example": true
+                        }
+                      }
+                    },
+                    "error": {
+                      "type": "null",
+                      "nullable": true,
+                      "example": null
+                    }
+                  }
+                }
+              }
+            }
+          }
+        }
+      }
+    },
+    "/api/cron/status": {
+      "get": {
+        "summary": "Get scheduled-job status",
+        "description": "Returns whether the scheduled job is enabled, its cron pattern, whether a run is currently in progress, and details of the last run.",
+        "responses": {
+          "200": {
+            "description": "Cron status",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "type": "object",
+                  "properties": {
+                    "success": {
+                      "type": "boolean"
+                    },
+                    "data": {
+                      "type": "object",
+                      "properties": {
+                        "enabled": {
+                          "type": "boolean"
+                        },
+                        "schedule": {
+                          "type": "string"
+                        },
+                        "isRunning": {
+                          "type": "boolean"
+                        },
+                        "lastRun": {
+                          "type": "object",
+                          "nullable": true
+                        }
+                      }
+                    },
+                    "error": {
+                      "type": "object",
+                      "nullable": true
+                    }
+                  }
+                }
+              }
+            }
+          }
+        },
+        "tags": [
+          "Cron"
+        ]
+      }
+    },
+    "/api/cron/run-now": {
+      "post": {
+        "summary": "Trigger an immediate email-processing run",
+        "description": "Runs the same pipeline + validate/map/save logic as the scheduled job, outside the schedule. Returns 409 if a run is already in progress.",
+        "responses": {
+          "200": {
+            "description": "Run completed",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "type": "object"
+                }
+              }
+            }
+          },
+          "409": {
+            "description": "A cron run is already in progress"
+          }
+        },
+        "tags": [
+          "Cron"
+        ]
+      }
+    }
+  }
+}

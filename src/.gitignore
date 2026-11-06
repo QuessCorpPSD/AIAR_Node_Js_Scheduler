@@ -1,0 +1,11 @@
+/dist
+/node_modules
+/.angular
+npm-debug.log
+.DS_Store
+server/node_modules
+server/.env
+server/logs
+
+/data
+/logs
